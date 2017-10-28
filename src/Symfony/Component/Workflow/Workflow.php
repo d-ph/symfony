@@ -96,20 +96,36 @@ class Workflow
         $marking = $this->getMarking($subject);
 
         foreach ($transitions as $transition) {
-            foreach ($transition->getFroms() as $place) {
-                if (!$marking->has($place)) {
-                    // do not emit guard events for transitions where the marking does not contain
-                    // all "from places" (thus the transition couldn't be applied anyway)
-                    continue 2;
-                }
-            }
-
             if ($transitionName === $transition->getName() && $this->doCan($subject, $marking, $transition)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * Returns transition blockers explaining by a transition cannot be made.
+     *
+     * @param object $subject        A subject
+     * @param string $transitionName A transition
+     *
+     * @return TransitionBlockerList empty if the transition is possible
+     */
+    public function whyCannot($subject, $transitionName)
+    {
+        $eligibleTransitions = $this->getTransitionsByName($transitionName);
+        $marking = $this->getMarking($subject);
+
+        $transitionBlockerList = new TransitionBlockerList();
+
+        foreach ($eligibleTransitions as $transition) {
+            $transitionBlockerList->addAll(
+                $this->doCan($subject, $marking, $transition)
+            );
+        }
+
+        return $transitionBlockerList;
     }
 
     /**
@@ -205,11 +221,18 @@ class Workflow
         return $this->markingStore;
     }
 
+    /**
+     * @param object $subject
+     * @param Marking $marking
+     * @param Transition $transition
+     *
+     * @return TransitionBlockerList
+     */
     private function doCan($subject, Marking $marking, Transition $transition)
     {
         foreach ($transition->getFroms() as $place) {
             if (!$marking->has($place)) {
-                return false;
+                return new TransitionBlockerList([TransitionBlocker::createNotApplicable()]);
             }
         }
 
@@ -225,12 +248,12 @@ class Workflow
      * @param Marking    $marking
      * @param Transition $transition
      *
-     * @return bool|void boolean true if this transition is guarded, ie you cannot use it
+     * @return TransitionBlockerList
      */
     private function guardTransition($subject, Marking $marking, Transition $transition)
     {
         if (null === $this->dispatcher) {
-            return;
+            return new TransitionBlockerList();
         }
 
         $event = new GuardEvent($subject, $marking, $transition, $this->name);
@@ -239,7 +262,7 @@ class Workflow
         $this->dispatcher->dispatch(sprintf('workflow.%s.guard', $this->name), $event);
         $this->dispatcher->dispatch(sprintf('workflow.%s.guard.%s', $this->name, $transition->getName()), $event);
 
-        return $event->isBlocked();
+        return $event->getTransitionBlockerList();
     }
 
     private function leave($subject, Transition $transition, Marking $marking)
