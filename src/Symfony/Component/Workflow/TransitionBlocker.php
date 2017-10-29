@@ -18,7 +18,7 @@ class TransitionBlocker
 {
     const REASON_CODE_TRANSITION_NOT_DEFINED = 'com.symfony.www.workflow.transition_blocker.not_defined';
     const REASON_CODE_TRANSITION_NOT_APPLICABLE = 'com.symfony.www.workflow.transition_blocker.not_applicable';
-    const REASON_CODE_UNKNOWN = 'com.symfony.www.workflow.transition_blocker.unknown';
+    const REASON_CODE_TRANSITION_UNKNOWN = 'com.symfony.www.workflow.transition_blocker.unknown';
 
     private $message;
     private $code;
@@ -86,7 +86,7 @@ class TransitionBlocker
     {
         return new static(
             sprintf('Transition "%s" cannot be made, because of unknown reason.', $transitionName),
-            self::REASON_CODE_UNKNOWN
+            self::REASON_CODE_TRANSITION_UNKNOWN
         );
     }
 
