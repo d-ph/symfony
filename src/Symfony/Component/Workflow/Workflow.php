@@ -115,12 +115,17 @@ class Workflow
 
         $marking = $this->getMarking($subject);
 
+        // this is needed to silence static analysis in phpstorm
         $transitionBlockerList = new TransitionBlockerList();
 
         foreach ($eligibleTransitions as $transition) {
-            $transitionBlockerList->addAll(
-                $this->doCan($subject, $marking, $transition)
-            );
+            $transitionBlockerList = $this->doCan($subject, $marking, $transition);
+
+            // Stop checking transitions with the same name if at least
+            // one of them is possible
+            if (0 === count($transitionBlockerList)) {
+                return $transitionBlockerList;
+            }
         }
 
         return $transitionBlockerList;
@@ -139,9 +144,14 @@ class Workflow
      */
     public function apply($subject, $transitionName)
     {
-        $transitionBlockerList = $this->whyCannot($subject, $transitionName);
+        $transitionsOrTransitionBlockerList = $this->getEnabledTransitionsByNameOrTransitionBlockerList(
+            $subject,
+            $transitionName
+        );
 
-        if (count($transitionBlockerList)) {
+        if ($transitionsOrTransitionBlockerList instanceof TransitionBlockerList) {
+            $transitionBlockerList = $transitionsOrTransitionBlockerList;
+
             if ($transitionBlockerList->findByCode(TransitionBlocker::REASON_CODE_TRANSITION_NOT_DEFINED)) {
                 throw new UndefinedTransitionException(
                     sprintf('Transition "%s" is not defined in workflow "%s".', $transitionName, $this->name),
@@ -155,8 +165,7 @@ class Workflow
             );
         }
 
-        // At this point we know, that those transitions are allowed
-        $transitions = $this->getTransitionsByName($transitionName);
+        $transitions = $transitionsOrTransitionBlockerList;
 
         // We can shortcut the getMarking method in order to boost performance,
         // since the "getEnabledTransitions" method already checks the Marking
@@ -377,5 +386,43 @@ class Workflow
         );
 
         return $transitions;
+    }
+
+    /**
+     * Returns all enabled transitions or a transition blocker list of one of them.
+     *
+     * @param object $subject A subject
+     * @param string $transitionName
+     *
+     * @return Transition[]|TransitionBlockerList All enabled transitions or a blocker list
+     *                                            if no enabled transitions can be found
+     */
+    private function getEnabledTransitionsByNameOrTransitionBlockerList($subject, string $transitionName)
+    {
+        $eligibleTransitions = $this->getTransitionsByName($transitionName);
+
+        if (!$eligibleTransitions) {
+            return new TransitionBlockerList([TransitionBlocker::createNotDefined($transitionName, $this->name)]);
+        }
+
+        $marking = $this->getMarking($subject);
+        $transitions = array();
+
+        // this is needed to silence static analysis in phpstorm
+        $transitionBlockerList = new TransitionBlockerList();
+
+        foreach ($eligibleTransitions as $transition) {
+            $transitionBlockerList = $this->doCan($subject, $marking, $transition);
+
+            if (0 === count($transitionBlockerList)) {
+                $transitions[] = $transition;
+            }
+        }
+
+        if ($transitions) {
+            return $transitions;
+        }
+
+        return $transitionBlockerList;
     }
 }
