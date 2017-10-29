@@ -107,28 +107,16 @@ class Workflow
      */
     public function whyCannot($subject, $transitionName)
     {
-        $eligibleTransitions = $this->getTransitionsByName($transitionName);
+        $transitionsOrTransitionBlockerList = $this->getEnabledTransitionsByNameOrTransitionBlockerList(
+            $subject,
+            $transitionName
+        );
 
-        if (!$eligibleTransitions) {
-            return new TransitionBlockerList([TransitionBlocker::createNotDefined($transitionName, $this->name)]);
+        if ($transitionsOrTransitionBlockerList instanceof TransitionBlockerList) {
+            return $transitionsOrTransitionBlockerList;
         }
 
-        $marking = $this->getMarking($subject);
-
-        // this is needed to silence static analysis in phpstorm
-        $transitionBlockerList = new TransitionBlockerList();
-
-        foreach ($eligibleTransitions as $transition) {
-            $transitionBlockerList = $this->doCan($subject, $marking, $transition);
-
-            // Stop checking transitions with the same name if at least
-            // one of them is possible
-            if (0 === count($transitionBlockerList)) {
-                return $transitionBlockerList;
-            }
-        }
-
-        return $transitionBlockerList;
+        return new TransitionBlockerList();
     }
 
     /**
