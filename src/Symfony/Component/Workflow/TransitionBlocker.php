@@ -117,7 +117,7 @@ class TransitionBlocker
     }
 
     /**
-     * Returns a machine-digestible error code for the violation.
+     * Returns a machine-digestible error code for the blocker.
      *
      * @return string|null The error code
      */
