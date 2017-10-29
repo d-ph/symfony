@@ -142,12 +142,12 @@ class ConstraintViolationList implements \IteratorAggregate, ConstraintViolation
     /**
      * {@inheritdoc}
      */
-    public function offsetSet($offset, $blocker)
+    public function offsetSet($offset, $violation)
     {
         if (null === $offset) {
-            $this->add($blocker);
+            $this->add($violation);
         } else {
-            $this->set($offset, $blocker);
+            $this->set($offset, $violation);
         }
     }
 
