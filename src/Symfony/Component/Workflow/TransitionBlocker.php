@@ -18,6 +18,7 @@ class TransitionBlocker
 {
     const REASON_CODE_TRANSITION_NOT_DEFINED = 'com.symfony.www.workflow.transition_blocker.not_defined';
     const REASON_CODE_TRANSITION_NOT_APPLICABLE = 'com.symfony.www.workflow.transition_blocker.not_applicable';
+    const REASON_CODE_UNKNOWN = 'com.symfony.www.workflow.transition_blocker.unknown';
 
     private $message;
     private $code;
@@ -68,6 +69,24 @@ class TransitionBlocker
         return new static(
             sprintf('Transition "%s" cannot be made, because the subject is not in the required place.', $transitionName),
             self::REASON_CODE_TRANSITION_NOT_APPLICABLE
+        );
+    }
+
+    /**
+     * Create a blocker, that says the transition cannot be made because of unknown
+     * reason.
+     *
+     * This blocker code is chiefly for preserving backwards compatibility.
+     *
+     * @param string $transitionName
+     *
+     * @return static
+     */
+    public static function createUnknownReason(string $transitionName)
+    {
+        return new static(
+            sprintf('Transition "%s" cannot be made, because of unknown reason.', $transitionName),
+            self::REASON_CODE_UNKNOWN
         );
     }
 

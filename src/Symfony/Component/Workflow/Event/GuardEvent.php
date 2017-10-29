@@ -22,7 +22,6 @@ use Symfony\Component\Workflow\TransitionBlockerList;
  */
 class GuardEvent extends Event
 {
-    private $blocked = false;
     private $transitionBlockerList;
 
     /**
@@ -37,12 +36,17 @@ class GuardEvent extends Event
 
     public function isBlocked()
     {
-        return $this->blocked;
+        return 0 !== count($this->transitionBlockerList);
     }
 
     public function setBlocked($blocked)
     {
-        $this->blocked = (bool) $blocked;
+        if (!$blocked) {
+            $this->transitionBlockerList = new TransitionBlockerList();
+            return;
+        }
+
+        $this->transitionBlockerList->add(TransitionBlocker::createUnknownReason($this->getTransition()->getName()));
     }
 
     /**
@@ -58,7 +62,5 @@ class GuardEvent extends Event
     public function addTransitionBlocker(TransitionBlocker $transitionBlocker)
     {
         $this->transitionBlockerList->add($transitionBlocker);
-
-        $this->setBlocked(true);
     }
 }
