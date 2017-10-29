@@ -15,6 +15,8 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Workflow\Event\Event;
 use Symfony\Component\Workflow\Event\GuardEvent;
 use Symfony\Component\Workflow\Exception\LogicException;
+use Symfony\Component\Workflow\Exception\SubjectTransitionException;
+use Symfony\Component\Workflow\Exception\UndefinedTransitionException;
 use Symfony\Component\Workflow\MarkingStore\MarkingStoreInterface;
 use Symfony\Component\Workflow\MarkingStore\MultipleStateMarkingStore;
 
@@ -92,16 +94,7 @@ class Workflow
      */
     public function can($subject, $transitionName)
     {
-        $transitions = $this->definition->getTransitions();
-        $marking = $this->getMarking($subject);
-
-        foreach ($transitions as $transition) {
-            if ($transitionName === $transition->getName() && $this->doCan($subject, $marking, $transition)) {
-                return true;
-            }
-        }
-
-        return false;
+        return 0 === count($this->whyCannot($subject, $transitionName));
     }
 
     /**
@@ -110,11 +103,16 @@ class Workflow
      * @param object $subject        A subject
      * @param string $transitionName A transition
      *
-     * @return TransitionBlockerList empty if the transition is possible
+     * @return TransitionBlockerList Empty if the transition is possible
      */
     public function whyCannot($subject, $transitionName)
     {
         $eligibleTransitions = $this->getTransitionsByName($transitionName);
+
+        if (!$eligibleTransitions) {
+            return new TransitionBlockerList([TransitionBlocker::createNotDefined($transitionName, $this->name)]);
+        }
+
         $marking = $this->getMarking($subject);
 
         $transitionBlockerList = new TransitionBlockerList();
@@ -141,22 +139,31 @@ class Workflow
      */
     public function apply($subject, $transitionName)
     {
-        $transitions = $this->getEnabledTransitions($subject);
+        $transitionBlockerList = $this->whyCannot($subject, $transitionName);
+
+        if (count($transitionBlockerList)) {
+            if ($transitionBlockerList->findByCode(TransitionBlocker::REASON_CODE_TRANSITION_NOT_DEFINED)) {
+                throw new UndefinedTransitionException(
+                    sprintf('Transition "%s" is not defined in workflow "%s".', $transitionName, $this->name),
+                    $transitionBlockerList
+                );
+            }
+
+            throw new SubjectTransitionException(
+                sprintf('Unable to apply transition "%s" for workflow "%s".', $transitionName, $this->name),
+                $transitionBlockerList
+            );
+        }
+
+        // At this point we know, that those transitions are allowed
+        $transitions = $this->getTransitionsByName($transitionName);
 
         // We can shortcut the getMarking method in order to boost performance,
         // since the "getEnabledTransitions" method already checks the Marking
         // state
         $marking = $this->markingStore->getMarking($subject);
 
-        $applied = false;
-
         foreach ($transitions as $transition) {
-            if ($transitionName !== $transition->getName()) {
-                continue;
-            }
-
-            $applied = true;
-
             $this->leave($subject, $transition, $marking);
 
             $this->transition($subject, $transition, $marking);
@@ -170,10 +177,6 @@ class Workflow
             $this->completed($subject, $transition, $marking);
 
             $this->announce($subject, $transition, $marking);
-        }
-
-        if (!$applied) {
-            throw new LogicException(sprintf('Unable to apply transition "%s" for workflow "%s".', $transitionName, $this->name));
         }
 
         return $marking;
@@ -192,7 +195,7 @@ class Workflow
         $marking = $this->getMarking($subject);
 
         foreach ($this->definition->getTransitions() as $transition) {
-            if ($this->doCan($subject, $marking, $transition)) {
+            if (0 === count($this->doCan($subject, $marking, $transition))) {
                 $enabled[] = $transition;
             }
         }
@@ -232,15 +235,11 @@ class Workflow
     {
         foreach ($transition->getFroms() as $place) {
             if (!$marking->has($place)) {
-                return new TransitionBlockerList([TransitionBlocker::createNotApplicable()]);
+                return new TransitionBlockerList([TransitionBlocker::createNotApplicable($transition->getName())]);
             }
         }
 
-        if (true === $this->guardTransition($subject, $marking, $transition)) {
-            return false;
-        }
-
-        return true;
+        return $this->guardTransition($subject, $marking, $transition);
     }
 
     /**
@@ -361,5 +360,22 @@ class Workflow
         foreach ($this->getEnabledTransitions($subject) as $transition) {
             $this->dispatcher->dispatch(sprintf('workflow.%s.announce.%s', $this->name, $transition->getName()), $event);
         }
+    }
+
+    /**
+     * @param string $transitionName
+     *
+     * @return Transition[]
+     */
+    private function getTransitionsByName(string $transitionName)
+    {
+        $transitions = array_filter(
+            $this->definition->getTransitions(),
+            function (Transition $transition) use ($transitionName) {
+                return $transition->getName() === $transitionName;
+            }
+        );
+
+        return $transitions;
     }
 }

@@ -7,10 +7,12 @@ use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Workflow\Definition;
 use Symfony\Component\Workflow\Event\Event;
 use Symfony\Component\Workflow\Event\GuardEvent;
+use Symfony\Component\Workflow\Exception\SubjectTransitionException;
 use Symfony\Component\Workflow\Marking;
 use Symfony\Component\Workflow\MarkingStore\MarkingStoreInterface;
 use Symfony\Component\Workflow\MarkingStore\MultipleStateMarkingStore;
 use Symfony\Component\Workflow\Transition;
+use Symfony\Component\Workflow\TransitionBlocker;
 use Symfony\Component\Workflow\Workflow;
 
 class WorkflowTest extends TestCase
@@ -445,19 +447,6 @@ class WorkflowTest extends TestCase
             );
         };
 
-//        $assertTransitionBlockerPresentByCodeFn = function (string $code) use ($transitionBlockers) {
-//            $foundTransitionBlocker = array_filter(
-//                $transitionBlockers,
-//                function (TransitionBlocker $transitionBlocker) use ($code) {
-//                    return $transitionBlocker->getCode() === $code;
-//                }
-//            );
-//
-//            if (!$foundTransitionBlocker) {
-//                $this->fail(sprintf('Could not find expected transition blocker with code: "%s"', $code));
-//            }
-//        };
-
         $assertTransitionBlockerPresentByCodeFn('blocker_1');
         $assertTransitionBlockerPresentByCodeFn('blocker_2');
         $assertTransitionBlockerPresentByCodeFn('blocker_3');
@@ -514,6 +503,8 @@ class WorkflowTest extends TestCase
                 $exception->getTransitionBlockerList()->findByCode('blocker_1'),
                 'Workflow failed to convey it could not transition subject because of expected blocker'
             );
+
+            return;
         }
 
         $this->fail('Workflow failed to prevent a transition from happening');
